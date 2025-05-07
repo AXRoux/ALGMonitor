@@ -19,7 +19,11 @@ const DashboardPage = () => {
   const alertsTodayCount = 0; // Placeholder
   const restrictedZonesCount = 0; // Placeholder
   
-  const userRoleQuery = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip');
+  const userRoleQuery = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip') as
+    | 'admin'
+    | 'fisher'
+    | undefined
+    | 'skip';
 
   if (!isSignedIn) {
     return (
@@ -30,11 +34,11 @@ const DashboardPage = () => {
   }
 
   // Handle loading state for the role query first
-  if (userRoleQuery === undefined || userRoleQuery === 'skip') {
+  if (!isSignedIn || userRoleQuery === undefined || userRoleQuery === 'skip') {
     return <LoadingSpinner />;
   }
 
-  const userRole = userRoleQuery; // Assign after loading check
+  const userRole = userRoleQuery as 'admin' | 'fisher'; // after checks above it can't be skip/undefined
   const welcomeName = user?.firstName || user?.username || (userRole === 'admin' ? 'Administrator' : 'User');
 
   // Example of how you might fetch actual counts later

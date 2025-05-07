@@ -1,4 +1,7 @@
 import React from 'react';
+import dynamic from 'next/dynamic';
+
+const LiveMap = dynamic(() => import('../components/LiveMap'), { ssr: false });
 
 const MapPage = () => {
   return (
@@ -8,13 +11,8 @@ const MapPage = () => {
         <p className="text-slate-600 mt-1">Real-time vessel positions and restricted zones / مواقع السفن والمناطق المحظورة في الوقت الحقيقي</p>
       </header>
       
-      {/* Placeholder for Leaflet Map */}
-      <div 
-        className="bg-white shadow-lg rounded-lg p-2 h-[600px] flex items-center justify-center text-slate-400 border border-slate-200"
-        aria-label="Maritime Map Placeholder"
-      >
-        <p className="text-xl">Map Area - Integration with React-Leaflet pending.</p>
-        {/* TODO: Integrate React-Leaflet here */}
+      <div className="rounded-lg overflow-hidden w-full">
+        <LiveMap />
       </div>
 
       {/* Optional: Filters or controls for the map */}

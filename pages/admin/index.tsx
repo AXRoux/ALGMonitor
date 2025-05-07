@@ -7,6 +7,14 @@ import Link from 'next/link';
 const AdminDashboardPage = () => {
   const { isSignedIn } = useAuth();
 
+  // Always call the query; use "skip" sentinel when signed out to keep hook order stable
+  const userRole = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip') as
+    | 'admin'
+    | 'fisher'
+    | null
+    | 'skip'
+    | undefined;
+
   if (!isSignedIn) {
     return (
       <div className="bg-white shadow-sm rounded-lg p-6">
@@ -15,8 +23,14 @@ const AdminDashboardPage = () => {
     );
   }
 
-  // User is signed in; fetch their role
-  const userRole = useQuery(api.users.getMyUserRole, {});
+  if (userRole === 'skip' || userRole === undefined) {
+    // Still loading userRole from Convex
+    return (
+      <div className="flex justify-center items-center p-10">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-600"></div>
+      </div>
+    );
+  }
 
   if (userRole === null) {
     // User is signed in, but has no role assigned in Convex userRoles table yet.

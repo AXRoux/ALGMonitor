@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 
 // Internal Mutation: Update or insert a vessel's position.
 // Called by the AIS ingestion action.
@@ -32,4 +32,14 @@ export const upsertVesselPosition = internalMutation({
 
 // Note: A query to get live vessel positions for the map can also live here
 // or in a more general 'mapData.ts' or 'queries.ts' file.
-// For now, we'll assume it's handled elsewhere or will be added later. 
+// For now, we'll assume it's handled elsewhere or will be added later.
+
+// Query: get recent vessel positions (last 30 minutes)
+export const listRecentPositions = query({
+  args: {},
+  handler: async (ctx) => {
+    const since = Date.now() - 30 * 60 * 1000;
+    const all = await ctx.db.query("vesselPositions").collect();
+    return all.filter((v) => v.timestamp >= since);
+  },
+}); 

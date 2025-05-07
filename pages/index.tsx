@@ -47,6 +47,41 @@ const LandingPage = () => {
     }
   ];
 
+  // Storytelling sections with imagery
+  type StoryBlock = {
+    title: string;
+    titleArabic: string;
+    description: string;
+    imageUrl: string;
+  };
+
+  const storyBlocks: StoryBlock[] = [
+    {
+      title: 'Safeguarding a Proud Maritime Heritage',
+      titleArabic: 'حماية التراث البحري الجزائري',
+      description:
+        "Algeria's 1,600 km of coastline has supported communities for centuries. Our platform helps preserve that legacy by monitoring illegal activities and protecting sustainable fishing.",
+      imageUrl:
+        'https://images.unsplash.com/photo-1535585538107-e457d37fbde5?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    },
+    {
+      title: 'Situational Awareness in Real-Time',
+      titleArabic: 'الوعي الظرفي في الوقت الحقيقي',
+      description:
+        'Live AIS feeds, geofencing logic and instant alerts give authorities the insight they need to act decisively, day or night.',
+      imageUrl:
+        'https://images.unsplash.com/photo-1504610926078-a1611febcad3?auto=format&fit=crop&w=1950&q=80',
+    },
+    {
+      title: 'Swift Response & Coordination',
+      titleArabic: 'استجابة سريعة وتنسيق فعال',
+      description:
+        'Time saved is lives saved. SMS and in-app notifications ensure commanders are informed the moment boundaries are breached, enabling rapid mobilisation of coast-guard assets.',
+      imageUrl:
+        'https://images.unsplash.com/photo-1612705671103-adda1148ff2c?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    },
+  ];
+
   return (
     <>
       <Head>
@@ -87,10 +122,10 @@ const LandingPage = () => {
               </SignInButton>
             )}
             {isSignedIn && (
-              <Button asChild size="lg" className="group bg-white hover:bg-slate-100 text-sky-700 shadow-xl text-lg px-8 py-6 transform transition-all duration-300 hover:scale-105 focus:ring-slate-300 focus:ring-offset-sky-800">
+              <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl text-lg px-8 py-6 transform transition-all duration-300 hover:scale-105 focus:ring-emerald-400 focus:ring-offset-sky-800 inline-flex items-center gap-2">
                 <Link href="/dashboard" aria-label="Go to Dashboard / الذهاب إلى لوحة التحكم" tabIndex={0}>
-                  Go to Dashboard / لوحة التحكم
-                  <ArrowRightIcon className="w-5 h-5 ml-2.5 transition-transform duration-300 group-hover:translate-x-1 text-sky-600" />
+                  <span>Go to Dashboard / لوحة التحكم</span>
+                  <ArrowRightIcon className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1 text-white" />
                 </Link>
               </Button>
             )}
@@ -144,6 +179,41 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* Storytelling image + text blocks */}
+      {storyBlocks.map((block, idx) => (
+        <section
+          key={block.title}
+          className={`py-16 md:py-24 ${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
+        >
+          <div className="container mx-auto px-6 lg:px-8 flex flex-col md:flex-row items-center gap-12 md:gap-20">
+            {/* Image */}
+            <div
+              className={`w-full md:w-1/2 rounded-lg overflow-hidden shadow-md ${
+                idx % 2 === 1 ? 'md:order-2' : ''
+              }`}
+            >
+              <img
+                src={block.imageUrl}
+                alt={block.title}
+                className="w-full h-64 md:h-96 object-cover"
+                loading="lazy"
+              />
+            </div>
+
+            {/* Text */}
+            <div className="w-full md:w-1/2">
+              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4 leading-tight">
+                {block.title}
+              </h3>
+              <p className="text-lg text-slate-600 mb-6 leading-relaxed">
+                {block.description}
+              </p>
+              <span className="block text-sky-700 font-medium">{block.titleArabic}</span>
+            </div>
+          </div>
+        </section>
+      ))}
+
       {/* Call To Action Section */}
       <section className="py-16 md:py-24 bg-linear-to-br from-emerald-700 via-sky-700 to-sky-800 text-white relative overflow-hidden" id="cta">
         <div className="absolute inset-0 opacity-5 bg-[url('/subtle-waves.svg')] bg-repeat"></div>
@@ -163,10 +233,10 @@ const LandingPage = () => {
               </SignInButton>
             )}
             {isSignedIn && (
-              <Button asChild size="lg" className="group bg-white hover:bg-slate-100 text-sky-700 shadow-lg px-8 py-6 text-lg transition-all duration-300 hover:scale-105 focus:ring-slate-300 focus:ring-offset-emerald-800">
+              <Button asChild size="lg" className="bg-sky-600 hover:bg-sky-500 text-white shadow-lg px-8 py-6 text-lg transition-all duration-300 hover:scale-105 focus:ring-sky-300 focus:ring-offset-emerald-800 inline-flex items-center gap-2">
                 <Link href="/dashboard" aria-label="Go to Dashboard" tabIndex={0}>
-                  Go to Dashboard
-                  <ArrowRightIcon className="w-5 h-5 ml-2.5 transition-transform duration-300 group-hover:translate-x-1 text-sky-600" />
+                  <span>Go to Dashboard</span>
+                  <ArrowRightIcon className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1 text-white" />
                 </Link>
               </Button>
             )}
