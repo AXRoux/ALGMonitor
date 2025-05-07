@@ -96,7 +96,7 @@ const LandingPage = () => {
 
       {/* Hero Section - Full viewport height MINUS the site header (if any on this page) */}
       <div className="min-h-[calc(100vh-var(--header-height))] flex flex-col justify-center items-center text-center px-4 bg-linear-to-br from-sky-700 via-sky-600 to-emerald-700 text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5 bg-[url('/subtle-waves.svg')] bg-repeat"></div> {/* Ensure subtle-waves.svg exists in /public */}
+        <div className="absolute inset-0 opacity-5 bg-white/10"></div>
 
         <div className="relative z-10 max-w-3xl mx-auto py-16 md:py-20">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
@@ -216,7 +216,7 @@ const LandingPage = () => {
 
       {/* Call To Action Section */}
       <section className="py-16 md:py-24 bg-linear-to-br from-emerald-700 via-sky-700 to-sky-800 text-white relative overflow-hidden" id="cta">
-        <div className="absolute inset-0 opacity-5 bg-[url('/subtle-waves.svg')] bg-repeat"></div>
+        <div className="absolute inset-0 opacity-5 bg-white/10"></div>
         <div className="container mx-auto px-6 lg:px-8 relative z-10 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6 max-w-3xl mx-auto">Ready to safeguard Algeria's shores?</h2>
           <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto text-sky-100">
