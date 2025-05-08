@@ -218,7 +218,7 @@ const LandingPage = () => {
       <section className="py-16 md:py-24 bg-linear-to-br from-emerald-700 via-sky-700 to-sky-800 text-white relative overflow-hidden" id="cta">
         <div className="absolute inset-0 opacity-5 bg-white/10"></div>
         <div className="container mx-auto px-6 lg:px-8 relative z-10 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6 max-w-3xl mx-auto">Ready to safeguard Algeria's shores?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 max-w-3xl mx-auto">Ready to safeguard Algeria&apos;s shores?</h2>
           <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto text-sky-100">
             Join the Algerian Maritime Monitor platform today and gain unparalleled situational awareness.
           </p>

@@ -77,7 +77,7 @@ export default function LiveMap() {
     return () => controller.abort();
   }, []);
 
-  if (!isClient) return null; // render nothing during SSR
+  // Early return removed to ensure React hooks run in the same order on every render.
 
   const geoJson = useMemo(() => {
     if (!zones) return undefined;
