@@ -126,4 +126,31 @@ export const getFisherProfileByMmsiInternal = internalQuery({
       .unique();
     return profile ?? null;
   },
+});
+
+// Admin Mutation: Update a fisher profile (name, phone, alertsEnabled)
+export const updateFisherByAdmin = mutation({
+  args: {
+    profileId: v.id("fisherProfiles"),
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    alertsEnabled: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { profileId, name, phone, alertsEnabled }) => {
+    // require admin via internal query
+    await ctx.runQuery(internal.users.internalEnsureAdmin, {});
+
+    const existing = await ctx.db.get(profileId);
+    if (!existing) throw new ConvexError("Fisher profile not found.");
+
+    const updates: any = {};
+    if (name !== undefined) updates.name = name;
+    if (phone !== undefined) updates.phone = phone;
+    if (alertsEnabled !== undefined) updates.alertsEnabled = alertsEnabled;
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(profileId, updates);
+    }
+    return profileId;
+  },
 }); 

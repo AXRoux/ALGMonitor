@@ -6,13 +6,15 @@ import { SignedIn, SignedOut, SignInButton } from '@clerk/nextjs';
 export default function ManageZonesPage() {
   const zones = useQuery(api.restrictedZones.listRestrictedZones, {});
   const addZone = useMutation(api.restrictedZones.addRestrictedZoneByAdmin);
+  const updateZone = useMutation(api.restrictedZones.updateRestrictedZoneByAdmin);
 
   // Log the Mapbox token to verify its presence on the client-side
-  console.log('Mapbox Token (Admin Zones):', process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
+  // console.log('Mapbox Token (Admin Zones):', process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [coordinates, setCoordinates] = useState(''); // expects stringified array [[[lon,lat]...]]
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coordinateError, setCoordinateError] = useState<string | null>(null); // New state for coordinate parsing error
@@ -55,16 +57,39 @@ export default function ManageZonesPage() {
     setCoordinateError(null); // Clear coordinate error on submit
     setSubmitting(true);
     try {
-      await addZone({ name, description, geoJsonCoordinates: coordinates });
+      if (editingZoneId) {
+        await updateZone({ zoneId: editingZoneId as any, name, description, geoJsonCoordinates: coordinates });
+      } else {
+        await addZone({ name, description, geoJsonCoordinates: coordinates });
+      }
       setName('');
       setDescription('');
       setCoordinates('');
+      setEditingZoneId(null);
       setCoordinateError(null); // Clear coordinate error on successful submit
     } catch (err: any) {
       setError(err?.message ?? 'Failed to add zone');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditZone = (z: any) => {
+    setEditingZoneId(z._id);
+    setName(z.name || '');
+    setDescription(z.description || '');
+    setCoordinates(z.geoJsonCoordinates || '');
+    setError(null);
+    setCoordinateError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingZoneId(null);
+    setName('');
+    setDescription('');
+    setCoordinates('');
+    setError(null);
+    setCoordinateError(null);
   };
 
   return (
@@ -85,7 +110,7 @@ export default function ManageZonesPage() {
 
           {/* Add Zone Form */}
           <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-slate-700">Add New Zone</h2>
+            <h2 className="text-lg font-semibold text-slate-700">{editingZoneId ? 'Edit Zone' : 'Add New Zone'}</h2>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -106,7 +131,12 @@ export default function ManageZonesPage() {
                 {coordinateError && <p className="text-xs text-red-500 mt-1">{coordinateError}</p>}
               </div>
             </div>
-            <button type="submit" disabled={submitting || !!coordinateError} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded disabled:opacity-50" aria-busy={submitting}>Add Zone</button>
+            <div className="flex items-center gap-2">
+              <button type="submit" disabled={submitting || !!coordinateError} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded disabled:opacity-50" aria-busy={submitting}>{editingZoneId ? 'Save Changes' : 'Add Zone'}</button>
+              {editingZoneId && (
+                <button type="button" onClick={handleCancelEdit} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded">Cancel</button>
+              )}
+            </div>
           </form>
 
           {/* Existing Zones List */}
@@ -115,9 +145,12 @@ export default function ManageZonesPage() {
             {zones?.length ? (
               <ul className="divide-y divide-slate-200">
                 {zones.map((z: any) => (
-                  <li key={z._id} className="py-2 flex flex-col">
-                    <span className="font-medium">{z.name}</span>
-                    <span className="text-xs text-slate-500">{z.description}</span>
+                  <li key={z._id} className="py-2 flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <span className="font-medium">{z.name}</span>
+                      <span className="text-xs text-slate-500">{z.description}</span>
+                    </div>
+                    <button onClick={() => handleEditZone(z)} className="text-sm text-sky-600 hover:underline">Edit</button>
                   </li>
                 ))}
               </ul>

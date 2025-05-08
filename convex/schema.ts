@@ -7,6 +7,7 @@ export default defineSchema({
     name: v.string(),
     mmsi: v.string(),             // Marine Mobile Service Identity - should be unique
     phone: v.string(),            // For Twilio SMS alerts
+    alertsEnabled: v.optional(v.boolean()), // Whether to send zone alerts
     // organizationId: v.optional(v.string()), // Optional: If using Clerk organizations for role separation
   })
   .index("by_clerkUserId", ["clerkUserId"])
@@ -49,5 +50,13 @@ export default defineSchema({
     role: v.union(v.literal("admin"), v.literal("fisher")),
   })
   .index("by_clerkUserId", ["clerkUserId"])
-  .index("by_role", ["role"])
+  .index("by_role", ["role"]),
+
+  invites: defineTable({
+    email: v.string(),
+    token: v.string(),
+    role: v.union(v.literal("admin"), v.literal("fisher")),
+    consumedBy: v.optional(v.string()), // Clerk user ID once used
+  })
+  .index("by_token", ["token"]),
 }); 

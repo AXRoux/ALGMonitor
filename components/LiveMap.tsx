@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { LayerProps } from 'react-map-gl';
@@ -114,6 +114,22 @@ export default function LiveMap() {
   // Viewport state for react-map-gl v6 interactivity
   const [viewport, setViewport] = useState({ longitude: 3, latitude: 36.7, zoom: 6 });
 
+  // Ref to access underlying mapbox-gl Map instance
+  const mapRef = useRef<any>(null);
+
+  // Increase zoom speed when map first loads
+  const handleMapLoad = () => {
+    const map = mapRef.current?.getMap?.();
+    if (!map) return;
+    try {
+      // Faster wheel zoom: larger zoom change per wheel delta
+      map.scrollZoom?.setWheelZoomRate?.(1 / 120); // default is 1/450
+      map.scrollZoom?.setZoomRate?.(1);            // default ~0.2
+    } catch (_) {
+      // Ignore if API differs between mapbox versions
+    }
+  };
+
   // Fit map to combined zone bounds when they first load
   useEffect(() => {
     if (!combinedZones || combinedZones.features.length === 0) return;
@@ -147,6 +163,7 @@ export default function LiveMap() {
 
   return (
     <MapGL
+      ref={mapRef}
       {...viewport}
       onViewportChange={setViewport}
       mapboxApiAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
@@ -154,6 +171,7 @@ export default function LiveMap() {
       width="100%"
       height="600px"
       style={{ borderRadius: '0.5rem' }}
+      onLoad={handleMapLoad}
     >
       {combinedZones && (
         <Source id="zones" type="geojson" data={combinedZones}>
