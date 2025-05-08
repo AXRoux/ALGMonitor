@@ -14,10 +14,9 @@ const LoadingSpinner = () => (
 const DashboardPage = () => {
   const { isSignedIn, user } = useUser();
   
-  // Placeholder data until actual queries are implemented
-  const activeVesselsCount = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip'); // Just to have a query example, replace later
-  const alertsTodayCount = 0; // Placeholder
-  const restrictedZonesCount = 0; // Placeholder
+  const activeVesselsCount = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip'); 
+  const alertsTodayCount = 0; 
+  const restrictedZonesCount = 0; 
   
   const userRoleQuery = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip') as
     | 'admin'
@@ -33,18 +32,12 @@ const DashboardPage = () => {
     );
   }
 
-  // Handle loading state for the role query first
-  if (!isSignedIn || userRoleQuery === undefined || userRoleQuery === 'skip') {
+  if (userRoleQuery === undefined || userRoleQuery === 'skip') {
     return <LoadingSpinner />;
   }
 
-  const userRole = userRoleQuery as 'admin' | 'fisher'; // after checks above it can't be skip/undefined
+  const userRole = userRoleQuery as 'admin' | 'fisher'; 
   const welcomeName = user?.firstName || user?.username || (userRole === 'admin' ? 'Administrator' : 'User');
-
-  // Example of how you might fetch actual counts later
-  // const actualActiveVessels = useQuery(api.vessels?.getActiveVesselsCount || (() => 0), {});
-  // const actualAlertsToday = useQuery(api.alerts?.getAlertsTodayCount || (() => 0), {});
-  // const actualRestrictedZones = useQuery(api.restrictedZones?.getRestrictedZonesCount || (() => 0), {});
 
   return (
     <div className="space-y-6">
@@ -58,7 +51,6 @@ const DashboardPage = () => {
         <div className="bg-white shadow-lg rounded-xl p-6 border border-slate-200">
           <h2 className="text-xl font-semibold text-slate-700 mb-1">Active Vessels</h2>
           <p className="text-slate-500 text-sm mb-3">السفن النشطة</p>
-          {/* Replace with actualVesselsCount when query is ready */}
           <p className="text-5xl font-bold text-sky-600">{typeof activeVesselsCount === 'number' ? activeVesselsCount : 'N/A'} </p>
         </div>
         <div className="bg-white shadow-lg rounded-xl p-6 border border-slate-200">

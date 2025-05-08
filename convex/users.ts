@@ -102,4 +102,48 @@ export const ensureUserRoleDefaults = internalMutation({
     }
     return true;
   },
+});
+
+export const ensureRoleOnSignIn = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required.");
+    }
+
+    // 1. Check if user already has a role
+    const existingRole = await ctx.db
+      .query("userRoles")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (existingRole) {
+      return existingRole.role;
+    }
+
+    // 2. See if there is an unused invite matching the user's email
+    const email = identity.email ?? "";
+    let roleToAssign: "admin" | "fisher" = "fisher";
+    if (email) {
+      const invite = await ctx.db
+        .query("invites")
+        .withIndex("by_email", (q) => q.eq("email", email.toLowerCase()))
+        .filter((q) => q.eq(q.field("consumedBy"), undefined))
+        .first();
+
+      if (invite) {
+        roleToAssign = invite.role as "admin" | "fisher";
+        // Mark invite consumed
+        await ctx.db.patch(invite._id, { consumedBy: identity.subject });
+      }
+    }
+
+    // 3. Insert userRoles row
+    await ctx.db.insert("userRoles", {
+      clerkUserId: identity.subject,
+      role: roleToAssign,
+    });
+    return roleToAssign;
+  },
 }); 

@@ -58,5 +58,6 @@ export default defineSchema({
     role: v.union(v.literal("admin"), v.literal("fisher")),
     consumedBy: v.optional(v.string()), // Clerk user ID once used
   })
-  .index("by_token", ["token"]),
+  .index("by_token", ["token"])
+  .index("by_email", ["email"]),
 }); 
