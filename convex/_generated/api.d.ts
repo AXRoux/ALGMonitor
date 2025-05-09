@@ -16,6 +16,7 @@ import type {
 import type * as aisActions from "../aisActions.js";
 import type * as crons from "../crons.js";
 import type * as fisherProfiles from "../fisherProfiles.js";
+import type * as fisherVessels from "../fisherVessels.js";
 import type * as invites from "../invites.js";
 import type * as invitesActions from "../invitesActions.js";
 import type * as restrictedZones from "../restrictedZones.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   aisActions: typeof aisActions;
   crons: typeof crons;
   fisherProfiles: typeof fisherProfiles;
+  fisherVessels: typeof fisherVessels;
   invites: typeof invites;
   invitesActions: typeof invitesActions;
   restrictedZones: typeof restrictedZones;

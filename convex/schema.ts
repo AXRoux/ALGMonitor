@@ -60,4 +60,12 @@ export default defineSchema({
   })
   .index("by_token", ["token"])
   .index("by_email", ["email"]),
+
+  fisherVessels: defineTable({
+    clerkUserId: v.string(), // Fisher's Clerk user ID
+    vesselName: v.string(),
+    mmsi: v.string(),
+  })
+  .index("by_clerkUserId", ["clerkUserId"])
+  .index("by_mmsi", ["mmsi"]),
 }); 

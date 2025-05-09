@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { ShieldCheckIcon, MapIcon, HomeIcon, CogIcon, UsersIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'; // Example icons
+import { useQuery } from "convex/react"; // NEW
+import { api as convexApi } from "@/convex/_generated/api"; // NEW
 
 const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const appName = "Algerian Maritime Monitor";
@@ -16,6 +18,10 @@ const Layout: React.FC<PropsWithChildren> = ({ children }) => {
     { href: '/alerts', label: 'Alerts Log', labelArabic: 'سجل التنبيهات', icon: ExclamationTriangleIcon }, // Example new page
   ];
 
+  const fisherExtraItems = [
+    { href: '/vessels', label: 'My Vessels', labelArabic: 'قواربي', icon: UsersIcon },
+  ];
+
   const adminNavItems = [
     { href: '/admin', label: 'Admin Overview', labelArabic: 'نظرة عامة للمسؤول', icon: CogIcon },
     { href: '/admin/fishers', label: 'Manage Fishers', labelArabic: 'إدارة الصيادين', icon: UsersIcon },
@@ -24,6 +30,7 @@ const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
   // Determine sidebar visibility: show only when user is signed in AND not on the public landing page ("/")
   const { isSignedIn } = useUser();
+  const role = useQuery(convexApi.users.getMyUserRole, isSignedIn ? {} : 'skip') as 'admin' | 'fisher' | null | 'skip' | undefined;
   const router = useRouter();
   const showSidebar = isSignedIn && router.pathname !== '/';
 
@@ -63,7 +70,7 @@ const Layout: React.FC<PropsWithChildren> = ({ children }) => {
             <aside className="w-64 bg-slate-800 text-slate-200 p-4 space-y-6 shadow-lg hidden md:block">
               <nav className="space-y-2">
                 <p className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Main Navigation</p>
-                {navItems.map((item) => (
+                {[...navItems, ...(role === 'fisher' ? fisherExtraItems : [])].map((item) => (
                   <Link
                     key={item.label}
                     href={item.href}
@@ -76,8 +83,8 @@ const Layout: React.FC<PropsWithChildren> = ({ children }) => {
                 ))}
               </nav>
 
-              {/* Admin Navigation - Potentially conditionally rendered based on user role */}
-              <SignedIn> {/* Further role check needed here with useAuth/useUser from Clerk + Convex role */}
+              {/* Admin Navigation - render only for admins */}
+              {role === 'admin' && (
                 <nav className="space-y-2 pt-4 border-t border-slate-700">
                   <p className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Admin Tools</p>
                   {adminNavItems.map((item) => (
@@ -88,11 +95,10 @@ const Layout: React.FC<PropsWithChildren> = ({ children }) => {
                     >
                       <item.icon className="h-5 w-5 text-slate-400 group-hover:text-sky-300 transition-colors" />
                       <span>{item.label}</span>
-                      {/* <span className="text-xs text-slate-400 group-hover:text-sky-300">({item.labelArabic})</span> */}
                     </Link>
                   ))}
                 </nav>
-              </SignedIn>
+              )}
             </aside>
           )}
 
