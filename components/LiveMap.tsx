@@ -47,9 +47,44 @@ const zoneOutlineLayer: LayerProps = {
 const VESSEL_NAMES = [
   'El Kala',
   'Sahara Breeze',
+  'Oran Star',
+  'Algiers Pearl',
+  'Mediterranean Spirit',
 ];
 
 const MAX_ATTEMPTS = 20000; // limit for random sampling loops
+
+// Additional constraints for new vessels
+const HIGH_LAT_THRESHOLD = 37.4; // Ensures extra vessels appear farther north ("above" the first two)
+const MIN_VESSEL_SEPARATION = 0.1; // ~10-12 km separation to avoid crowding
+
+// Helper to clamp value between min / max
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+// Helper to generate a unique random MMSI (9-digit) not already used
+const generateUniqueMmsi = (taken: Set<number>): number => {
+  let candidate = 0;
+  while (candidate === 0 || taken.has(candidate)) {
+    candidate = 100000000 + Math.floor(Math.random() * 900000000);
+  }
+  taken.add(candidate);
+  return candidate;
+};
+
+// Helper to ensure sufficient distance from existing vessels
+const isFarFromOthers = (
+  lon: number,
+  lat: number,
+  others: { lat: number; lon: number }[],
+  min = MIN_VESSEL_SEPARATION,
+): boolean => {
+  return others.every((o) => {
+    const dLat = lat - o.lat;
+    const dLon = lon - o.lon;
+    return Math.sqrt(dLat * dLat + dLon * dLon) >= min;
+  });
+};
 
 export default function LiveMap() {
   const isClient = typeof window !== 'undefined';
@@ -94,22 +129,8 @@ export default function LiveMap() {
     maxLon: 9.5,
   };
 
-  // Desired number of simulated vessels (keep only two)
-  const FLEET_SIZE = 2;
-
-  // Helper to clamp value between min / max
-  const clamp = (value: number, min: number, max: number) =>
-    Math.min(Math.max(value, min), max);
-
-  // Helper to generate a unique random MMSI (9-digit) not already used
-  const generateUniqueMmsi = (taken: Set<number>): number => {
-    let candidate = 0;
-    while (candidate === 0 || taken.has(candidate)) {
-      candidate = 100000000 + Math.floor(Math.random() * 900000000);
-    }
-    taken.add(candidate);
-    return candidate;
-  };
+  // Desired number of simulated vessels (now five)
+  const FLEET_SIZE = 5;
 
   // ---------------------------------------------------------------------
   //  Remote Algerian EEZ (for sea-only bounds)
@@ -117,7 +138,7 @@ export default function LiveMap() {
 
   const [remoteZones, setRemoteZones] = useState<GeoJSON.FeatureCollection | null>(null);
 
-  // Fetch Algerian EEZ polygon via Marine Regions WFS (once on mount)
+  // Fetch Algerian EEZ polygon once on mount (via Marine Regions WFS)
   useEffect(() => {
     const controller = new AbortController();
     const fetchRemote = async () => {
@@ -133,71 +154,42 @@ export default function LiveMap() {
         const json = (await res.json()) as GeoJSON.FeatureCollection;
         setRemoteZones(json);
       } catch (_) {
-        // Network or CORS error – ignore silently
+        // Ignore network / CORS errors silently
       }
     };
     fetchRemote();
     return () => controller.abort();
   }, []);
 
-  // Function to create an individual mock vessel
-  const createMockVessel = (idx: number): MockVesselPosition => {
-    // temporary initial position, will be overwritten when sampling
-    return {
-      mmsi: 100000000 + idx,
-      vesselName: `Mock Vessel ${idx + 1}`,
-      lat: 0,
-      lon: 0,
-      isRegistered: Math.random() < 0.7,
-      isMoving: Math.random() < 0.5,
-      timestamp: Date.now(),
-    };
-  };
-
-  // Utility: Ray-casting algorithm for point-in-polygon
+  // Utility: Ray-casting algorithm for point-in-polygon testing
   const pointInRing = (pt: [number, number], ring: number[][]): boolean => {
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
       const xi = ring[i][0], yi = ring[i][1];
       const xj = ring[j][0], yj = ring[j][1];
       const intersect = ((yi > pt[1]) !== (yj > pt[1])) &&
-        (pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi);
+        pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;
   };
 
   const isPointInsideRemoteZones = (lon: number, lat: number): boolean => {
-    // If EEZ data is missing (e.g. network failure) treat the point as valid – ensures we always have vessels.
     if (!remoteZones || !remoteZones.features || remoteZones.features.length === 0) {
-      return true;
+      return true; // treat as valid if EEZ unavailable
     }
 
     for (const feature of remoteZones.features) {
       const geom = feature.geometry;
-      if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon')) {
-        continue;
-      }
+      if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon')) continue;
 
       if (geom.type === 'Polygon') {
-        const polygonGeom = geom as GeoJSON.Polygon;
-        if (polygonGeom.coordinates && polygonGeom.coordinates.length > 0) {
-          const ring = polygonGeom.coordinates[0];
-          if (ring && ring.length >= 3) {
-            if (pointInRing([lon, lat], ring as number[][])) return true;
-          }
-        }
-      } else if (geom.type === 'MultiPolygon') {
-        const multiPolygonGeom = geom as GeoJSON.MultiPolygon;
-        if (multiPolygonGeom.coordinates && multiPolygonGeom.coordinates.length > 0) {
-          for (const polygonCoordinates of multiPolygonGeom.coordinates) {
-            if (polygonCoordinates && polygonCoordinates.length > 0) {
-              const ring = polygonCoordinates[0];
-              if (ring && ring.length >= 3) {
-                if (pointInRing([lon, lat], ring as number[][])) return true;
-              }
-            }
-          }
+        const ring = (geom as GeoJSON.Polygon).coordinates[0];
+        if (ring && ring.length >= 3 && pointInRing([lon, lat], ring as number[][])) return true;
+      } else {
+        for (const poly of (geom as GeoJSON.MultiPolygon).coordinates) {
+          const ring = poly[0];
+          if (ring && ring.length >= 3 && pointInRing([lon, lat], ring as number[][])) return true;
         }
       }
     }
@@ -215,11 +207,22 @@ export default function LiveMap() {
     let attempts = 0;
 
     while (newVessels.length < FLEET_SIZE && attempts < MAX_ATTEMPTS) {
+      const candidateIdx = newVessels.length;
       const lon = BOUNDS.minLon + Math.random() * (BOUNDS.maxLon - BOUNDS.minLon);
       const lat = BOUNDS.minLat + Math.random() * (BOUNDS.maxLat - BOUNDS.minLat);
-      if (isPointInsideRemoteZones(lon, lat)) {
+
+      // Ensure the three additional vessels spawn farther north
+      if (candidateIdx >= 2 && lat < HIGH_LAT_THRESHOLD) {
+        attempts++;
+        continue;
+      }
+
+      if (
+        isPointInsideRemoteZones(lon, lat) &&
+        isFarFromOthers(lon, lat, newVessels)
+      ) {
         const mmsi = generateUniqueMmsi(takenMmsi);
-        const name = VESSEL_NAMES[newVessels.length % VESSEL_NAMES.length];
+        const name = VESSEL_NAMES[candidateIdx % VESSEL_NAMES.length];
 
         newVessels.push({
           mmsi,
@@ -276,11 +279,22 @@ export default function LiveMap() {
       const result: MockVesselPosition[] = [...inSea];
 
       while (result.length < FLEET_SIZE && attempts < MAX_ATTEMPTS) {
+        const candidateIdx = result.length;
         const lon = BOUNDS.minLon + Math.random() * (BOUNDS.maxLon - BOUNDS.minLon);
         const lat = BOUNDS.minLat + Math.random() * (BOUNDS.maxLat - BOUNDS.minLat);
-        if (isPointInsideRemoteZones(lon, lat)) {
+
+        // Keep extra vessels to the north
+        if (candidateIdx >= 2 && lat < HIGH_LAT_THRESHOLD) {
+          attempts++;
+          continue;
+        }
+
+        if (
+          isPointInsideRemoteZones(lon, lat) &&
+          isFarFromOthers(lon, lat, result)
+        ) {
           const mmsi = generateUniqueMmsi(takenMmsi);
-          const name = VESSEL_NAMES[result.length % VESSEL_NAMES.length];
+          const name = VESSEL_NAMES[candidateIdx % VESSEL_NAMES.length];
           result.push({
             mmsi,
             vesselName: name,
