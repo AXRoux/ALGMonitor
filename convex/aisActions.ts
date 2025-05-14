@@ -5,53 +5,12 @@ import { api, internal } from "./_generated/api";
 // Main action to be called by a cron job to ingest AIS data.
 export const ingestAisDataFromApi = action({
   args: {},
-  handler: async (ctx) => {
-    console.log("Starting AIS data ingestion...");
-    const aisApiKey = process.env.AIS_STREAM_API_KEY;
-
-    if (!aisApiKey) {
-      console.error("AIS_STREAM_API_KEY is not set in Convex environment variables.");
-      throw new ConvexError("AIS API key is not configured.");
-    }
-
-    // 1. Fetch data from AIS Stream API (Implementation to be added)
-    // Example structure for fetched data: [{ mmsi: string, lat: number, lon: number, timestamp: number, ... }]
-    let fetchedVesselData: any[] = []; 
-    // --- ADD AIS API FETCH LOGIC HERE ---
-    // E.g., using fetch() to call the AIS provider's HTTP API endpoint.
-    // Remember to handle potential errors from the API call.
-
-    if (fetchedVesselData.length === 0) {
-      console.log("No new vessel data fetched.");
-      return "No new data";
-    }
-
-    // 2. Process each fetched vessel data point
-    for (const vessel of fetchedVesselData) {
-      // Basic validation of essential fields
-      if (!vessel.mmsi || vessel.lat == null || vessel.lon == null || vessel.timestamp == null) {
-        console.warn("Skipping vessel data due to missing fields:", vessel);
-        continue;
-      }
-
-      // Upsert the position into our database
-      await ctx.runMutation(internal.vesselPositions.upsertVesselPosition, {
-        mmsi: String(vessel.mmsi),
-        lat: Number(vessel.lat),
-        lon: Number(vessel.lon),
-        timestamp: Number(vessel.timestamp),
-      });
-
-      // Trigger alert check for this vessel
-      await ctx.runAction(internal.aisActions.checkForAlerts, { 
-        mmsi: String(vessel.mmsi),
-        lat: Number(vessel.lat),
-        lon: Number(vessel.lon),
-      });
-    }
-
-    console.log(`Processed ${fetchedVesselData.length} vessel updates.`);
-    return `Processed ${fetchedVesselData.length} updates.`;
+  // This action is kept for backward compatibility but is now disabled because
+  // Convex actions cannot open WebSocket connections. Ingestion is performed
+  // by the Next.js API route `pages/api/ingest-ais.ts` instead.
+  handler: async () => {
+    console.log("ingestAisDataFromApi is disabled. Use /api/ingest-ais route.");
+    return "Disabled - moved to Next.js API route.";
   },
 });
 
@@ -128,13 +87,33 @@ export const sendRestrictedZoneSmsAlert = internalAction({
 
     const messageBody = `Hello ${fisherName}, your vessel has entered the restricted zone: ${zoneName} at coordinates (${lat.toFixed(4)}, ${lon.toFixed(4)}). Please take appropriate action. - Algerian Maritime Monitor`;
 
-    // --- ADD TWILIO API CALL LOGIC HERE ---
-    // Example: using fetch() to call Twilio's Messages API.
-    // const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
-    // const response = await fetch(twilioUrl, { ... });
-    // Handle response and errors.
+    // Call Twilio Messages API
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
 
-    console.log(`SMS alert supposedly sent to ${phoneNumber} for zone ${zoneName}.`);
+    const body = new URLSearchParams({
+      From: twilioPhoneNumber,
+      To: phoneNumber,
+      Body: messageBody,
+    });
+
+    const authHeader = Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString("base64");
+
+    const resp = await fetch(twilioUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${authHeader}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.error("Twilio SMS send failed:", txt);
+      throw new ConvexError(`Twilio SMS failed: ${resp.status} ${resp.statusText}`);
+    }
+
+    console.log(`SMS alert sent to ${phoneNumber} for zone ${zoneName}.`);
     return true;
   },
 });
@@ -167,4 +146,7 @@ export const logAlertToDb = internalMutation({
 });
 
 // We will need a query in fisherProfiles.ts like getFisherProfileByMmsiInternal
-// For now, this file depends on its future existence. 
+// For now, this file depends on its future existence.
+
+// Remove the generateMockAisData action (development-only) to satisfy type checker.
+// ... existing code ends before this removed block ... 

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const LandingPage = () => {
-  const appName = "Algerian Maritime Monitor";
+  const appName = "ALMARSA";
+  const appFullName = "ALgerian MARitime Surveillance and Alert system";
   const appNameArabic = "المرصد البحري الجزائري";
   const { isSignedIn } = useUser();
 
@@ -86,7 +87,7 @@ const LandingPage = () => {
     <>
       <Head>
         <title>Welcome to {appName}</title>
-        <meta name="description" content={`Welcome to ${appName} - ${appNameArabic}. Advanced maritime monitoring and security.`} />
+        <meta name="description" content={`Welcome to ${appName} - ${appFullName}. Advanced maritime surveillance and alert system.`} />
         <style jsx global>{`
           body {
             --header-height: 0px; /* Assuming landing page might not have the main layout header or it's different */
@@ -99,12 +100,13 @@ const LandingPage = () => {
         <div className="absolute inset-0 opacity-5 bg-white/10"></div>
 
         <div className="relative z-10 max-w-3xl mx-auto py-16 md:py-20">
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-2">
             {appName}
-            <span className="block text-sky-300 text-2xl sm:text-3xl mt-2 font-normal">{appNameArabic}</span>
           </h1>
-          <p className="text-lg sm:text-xl text-sky-100 max-w-2xl mx-auto mb-10">
-            Advanced real-time monitoring and alert systems for ensuring safety and security within Algerian waters. This platform is for authorized administrative personnel.
+          <h2 className="text-xl sm:text-2xl text-sky-200 mb-4 font-medium">{appFullName}</h2>
+          <span className="block text-sky-300 text-2xl sm:text-3xl mt-2 font-normal">{appNameArabic}</span>
+          <p className="text-lg sm:text-xl text-sky-100 max-w-2xl mx-auto mt-6 mb-10">
+            Advanced real-time surveillance and alert systems for ensuring safety and security within Algerian waters. This platform is for authorized administrative personnel.
           </p>
           
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
@@ -220,7 +222,7 @@ const LandingPage = () => {
         <div className="container mx-auto px-6 lg:px-8 relative z-10 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6 max-w-3xl mx-auto">Ready to safeguard Algeria&apos;s shores?</h2>
           <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto text-sky-100">
-            Join the Algerian Maritime Monitor platform today and gain unparalleled situational awareness.
+            Join the {appName} platform today and gain unparalleled situational awareness.
           </p>
 
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4">

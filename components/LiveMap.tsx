@@ -2,23 +2,28 @@ import dynamic from 'next/dynamic';
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
+import { useUser } from '@clerk/nextjs';
 import type { LayerProps } from 'react-map-gl';
 
-// Dynamically import react-map-gl (v6) components to bypass SSR issues
+// Dynamically import react-map-gl components to bypass SSR issues
 const MapGL: any = dynamic(() => import('react-map-gl').then((m: any) => m.default), { ssr: false });
 const Marker: any = dynamic(() => import('react-map-gl').then((m: any) => m.Marker), { ssr: false });
 const Source: any = dynamic(() => import('react-map-gl').then((m: any) => m.Source), { ssr: false });
 const Layer: any = dynamic(() => import('react-map-gl').then((m: any) => m.Layer), { ssr: false });
+const Popup: any = dynamic(() => import('react-map-gl').then((m: any) => m.Popup), { ssr: false });
 
-const vesselIcon = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className="w-3 h-3 text-emerald-500"
-    fill="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path d="M12 2l9 4-9 4-9-4 9-4zm0 9l9 4-9 4-9-4 9-4zm0 9l9 4-9 4-9-4 9-4z" />
-  </svg>
+// Updated vessel icon with better visibility
+const vesselIcon = (isRegistered = true) => (
+  <div className={`rounded-full p-1 ${isRegistered ? 'bg-emerald-500' : 'bg-slate-400'}`}>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-4 h-4 text-white"
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 2l9 4-9 4-9-4 9-4zm0 9l9 4-9 4-9-4 9-4zm0 9l9 4-9 4-9-4 9-4z" />
+    </svg>
+  </div>
 );
 
 const zoneFillLayer: LayerProps = {
@@ -39,23 +44,81 @@ const zoneOutlineLayer: LayerProps = {
   },
 };
 
+const VESSEL_NAMES = [
+  'El Kala',
+  'Sahara Breeze',
+];
+
+const MAX_ATTEMPTS = 20000; // limit for random sampling loops
+
 export default function LiveMap() {
   const isClient = typeof window !== 'undefined';
-
-  const zones = useQuery(
-    api.restrictedZones.listRestrictedZones,
-    isClient ? {} : 'skip'
+  const { user, isSignedIn } = useUser();
+  
+  // Get the user's role to determine filtering behavior
+  const userRole = useQuery(
+    api.users.getMyUserRole,
+    isClient && isSignedIn ? {} : 'skip'
   );
-  const positions = useQuery(
-    api.vesselPositions.listRecentPositions,
-    isClient ? {} : 'skip'
+  
+  // Get the user's vessels if they are a fisher
+  const myVessels = useQuery(
+    api.fisherVessels.listMyVessels,
+    isClient && isSignedIn && userRole === 'fisher' ? {} : 'skip'
   );
+  
+  // UI state for optional filtering & popup handling
+  const [filterMyVesselsOnly, setFilterMyVesselsOnly] = useState(false);
+  const [selectedVessel, setSelectedVessel] = useState<any>(null);
+  
+  // ---------------------------------------------------------------------
+  //  MOCK AIS DATA GENERATION & ANIMATION
+  // ---------------------------------------------------------------------
 
-  // Remote restricted zone GeoJSON fetched from Marine Regions (Algeria EEZ)
+  // Type for mock vessel position
+  type MockVesselPosition = {
+    mmsi: number;
+    vesselName: string;
+    lat: number;
+    lon: number;
+    isRegistered: boolean;
+    isMoving: boolean; // indicates if the vessel should randomly move
+    timestamp: number;
+  };
+
+  // Restrict latitude so that all generated points lie north of the coastline
+  const BOUNDS = {
+    minLat: 36.7, // roughly coastline latitude – keeps vessels in the Mediterranean
+    maxLat: 38.0,
+    minLon: -1.5,
+    maxLon: 9.5,
+  };
+
+  // Desired number of simulated vessels (keep only two)
+  const FLEET_SIZE = 2;
+
+  // Helper to clamp value between min / max
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), max);
+
+  // Helper to generate a unique random MMSI (9-digit) not already used
+  const generateUniqueMmsi = (taken: Set<number>): number => {
+    let candidate = 0;
+    while (candidate === 0 || taken.has(candidate)) {
+      candidate = 100000000 + Math.floor(Math.random() * 900000000);
+    }
+    taken.add(candidate);
+    return candidate;
+  };
+
+  // ---------------------------------------------------------------------
+  //  Remote Algerian EEZ (for sea-only bounds)
+  // ---------------------------------------------------------------------
+
   const [remoteZones, setRemoteZones] = useState<GeoJSON.FeatureCollection | null>(null);
 
+  // Fetch Algerian EEZ polygon via Marine Regions WFS (once on mount)
   useEffect(() => {
-    // Fetch Algerian EEZ polygon via Marine Regions WFS (iso_ter1 = DZA)
     const controller = new AbortController();
     const fetchRemote = async () => {
       try {
@@ -77,8 +140,193 @@ export default function LiveMap() {
     return () => controller.abort();
   }, []);
 
-  // Early return removed to ensure React hooks run in the same order on every render.
+  // Function to create an individual mock vessel
+  const createMockVessel = (idx: number): MockVesselPosition => {
+    // temporary initial position, will be overwritten when sampling
+    return {
+      mmsi: 100000000 + idx,
+      vesselName: `Mock Vessel ${idx + 1}`,
+      lat: 0,
+      lon: 0,
+      isRegistered: Math.random() < 0.7,
+      isMoving: Math.random() < 0.5,
+      timestamp: Date.now(),
+    };
+  };
 
+  // Utility: Ray-casting algorithm for point-in-polygon
+  const pointInRing = (pt: [number, number], ring: number[][]): boolean => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > pt[1]) !== (yj > pt[1])) &&
+        (pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  };
+
+  const isPointInsideRemoteZones = (lon: number, lat: number): boolean => {
+    // If EEZ data is missing (e.g. network failure) treat the point as valid – ensures we always have vessels.
+    if (!remoteZones || !remoteZones.features || remoteZones.features.length === 0) {
+      return true;
+    }
+
+    for (const feature of remoteZones.features) {
+      const geom = feature.geometry;
+      if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon')) {
+        continue;
+      }
+
+      if (geom.type === 'Polygon') {
+        const polygonGeom = geom as GeoJSON.Polygon;
+        if (polygonGeom.coordinates && polygonGeom.coordinates.length > 0) {
+          const ring = polygonGeom.coordinates[0];
+          if (ring && ring.length >= 3) {
+            if (pointInRing([lon, lat], ring as number[][])) return true;
+          }
+        }
+      } else if (geom.type === 'MultiPolygon') {
+        const multiPolygonGeom = geom as GeoJSON.MultiPolygon;
+        if (multiPolygonGeom.coordinates && multiPolygonGeom.coordinates.length > 0) {
+          for (const polygonCoordinates of multiPolygonGeom.coordinates) {
+            if (polygonCoordinates && polygonCoordinates.length > 0) {
+              const ring = polygonCoordinates[0];
+              if (ring && ring.length >= 3) {
+                if (pointInRing([lon, lat], ring as number[][])) return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  // Generate initial vessels once remoteZones are available
+  const [mockPositions, setMockPositions] = useState<MockVesselPosition[]>([]);
+
+  useEffect(() => {
+    if (mockPositions.length > 0) return;
+
+    const newVessels: MockVesselPosition[] = [];
+    const takenMmsi = new Set<number>();
+    let attempts = 0;
+
+    while (newVessels.length < FLEET_SIZE && attempts < MAX_ATTEMPTS) {
+      const lon = BOUNDS.minLon + Math.random() * (BOUNDS.maxLon - BOUNDS.minLon);
+      const lat = BOUNDS.minLat + Math.random() * (BOUNDS.maxLat - BOUNDS.minLat);
+      if (isPointInsideRemoteZones(lon, lat)) {
+        const mmsi = generateUniqueMmsi(takenMmsi);
+        const name = VESSEL_NAMES[newVessels.length % VESSEL_NAMES.length];
+
+        newVessels.push({
+          mmsi,
+          vesselName: name,
+          lat,
+          lon,
+          isRegistered: Math.random() < 0.7,
+          isMoving: Math.random() < 0.5,
+          timestamp: Date.now(),
+        });
+      }
+      attempts++;
+    }
+    setMockPositions(newVessels);
+  }, []);
+
+  // Animate moving vessels every 2 seconds with a subtle random walk
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setMockPositions((prev) =>
+        prev.map((v) => {
+          if (!v.isMoving) return v; // keep static vessels unchanged
+
+          const deltaLat = (Math.random() - 0.5) * 0.04; // ±0.02 degrees ~2 km
+          const deltaLon = (Math.random() - 0.5) * 0.04;
+
+          const newLat = clamp(v.lat + deltaLat, BOUNDS.minLat, BOUNDS.maxLat);
+          const newLon = clamp(v.lon + deltaLon, BOUNDS.minLon, BOUNDS.maxLon);
+
+          // Only apply move if still inside water (remoteZones)
+          if (isPointInsideRemoteZones(newLon, newLat)) {
+            return { ...v, lat: newLat, lon: newLon, timestamp: Date.now() };
+          }
+          return v; // otherwise remain
+        })
+      );
+    }, 2000); // update every 2 seconds
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // ---------------------------------------------------------------------
+  //  Ensure all vessels lie within EEZ once remoteZones is available
+  // ---------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!remoteZones || !remoteZones.features) return;
+
+    setMockPositions((prev) => {
+      const inSea = prev.filter((v) => isPointInsideRemoteZones(v.lon, v.lat));
+
+      const takenMmsi = new Set<number>(inSea.map((v) => v.mmsi));
+      let attempts = 0;
+      const result: MockVesselPosition[] = [...inSea];
+
+      while (result.length < FLEET_SIZE && attempts < MAX_ATTEMPTS) {
+        const lon = BOUNDS.minLon + Math.random() * (BOUNDS.maxLon - BOUNDS.minLon);
+        const lat = BOUNDS.minLat + Math.random() * (BOUNDS.maxLat - BOUNDS.minLat);
+        if (isPointInsideRemoteZones(lon, lat)) {
+          const mmsi = generateUniqueMmsi(takenMmsi);
+          const name = VESSEL_NAMES[result.length % VESSEL_NAMES.length];
+          result.push({
+            mmsi,
+            vesselName: name,
+            lat,
+            lon,
+            isRegistered: Math.random() < 0.7,
+            isMoving: Math.random() < 0.5,
+            timestamp: Date.now(),
+          });
+        }
+        attempts++;
+      }
+
+      return result;
+    });
+  }, [remoteZones]);
+
+  // ---------------------------------------------------------------------
+  //  Nudge specific vessel (Sahara Breeze) farther north if still too close
+  // ---------------------------------------------------------------------
+
+  useEffect(() => {
+    setMockPositions((prev) =>
+      prev.map((v) => {
+        if (v.vesselName === 'Sahara Breeze' && v.lat < 37.2) {
+          return { ...v, lat: 37.2 };
+        }
+        return v;
+      })
+    );
+  }, [mockPositions]);
+
+  // ---------------------------------------------------------------------
+  //  END OF REMOVED REAL AIS FETCH LOGIC
+  // ---------------------------------------------------------------------
+
+  // Convex API queries – we keep restricted zones & user info but stop fetching real AIS positions  
+  const zones = useQuery(
+    api.restrictedZones.listRestrictedZones,
+    isClient ? {} : 'skip'
+  );
+
+  // Use local mock positions instead of server state
+  const positions = mockPositions;
+
+  // Local DB restricted zones GeoJSON
   const geoJson = useMemo(() => {
     if (!zones) return undefined;
     return {
@@ -94,24 +342,34 @@ export default function LiveMap() {
     } as GeoJSON.FeatureCollection;
   }, [zones]);
 
-  // Merge database zones with remote zones
+  // Combined zones (DB + EEZ)
   const combinedZones: GeoJSON.FeatureCollection | undefined = useMemo(() => {
     const features: GeoJSON.Feature[] = [];
-
-    if (geoJson?.features) {
-      features.push(...geoJson.features);
-    }
-
-    if (remoteZones?.features) {
-      features.push(...remoteZones.features);
-    }
-
+    if (geoJson?.features) features.push(...geoJson.features);
+    if (remoteZones?.features) features.push(...remoteZones.features);
     if (features.length === 0) return undefined;
-
     return { type: 'FeatureCollection', features };
   }, [geoJson, remoteZones]);
 
-  // Viewport state for react-map-gl v6 interactivity
+  // Filter positions based on user role and preferences
+  const filteredPositions = useMemo(() => {
+    if (!positions) return [];
+    
+    // If not filtering or admin, show all vessels
+    if (!filterMyVesselsOnly || userRole === 'admin') {
+      return positions;
+    }
+    
+    // If fisher wants to see only their vessels
+    if (myVessels && Array.isArray(myVessels)) {
+      const myMmsiList = myVessels.map((v: any) => Number(v.mmsi));
+      return positions.filter((p: any) => myMmsiList.includes(Number(p.mmsi)));
+    }
+    
+    return positions;
+  }, [positions, myVessels, filterMyVesselsOnly, userRole]);
+
+  // Viewport state for react-map-gl
   const [viewport, setViewport] = useState({ longitude: 3, latitude: 36.7, zoom: 6 });
 
   // Ref to access underlying mapbox-gl Map instance
@@ -122,9 +380,8 @@ export default function LiveMap() {
     const map = mapRef.current?.getMap?.();
     if (!map) return;
     try {
-      // Faster wheel zoom: larger zoom change per wheel delta
-      map.scrollZoom?.setWheelZoomRate?.(1 / 120); // default is 1/450
-      map.scrollZoom?.setZoomRate?.(1);            // default ~0.2
+      map.scrollZoom?.setWheelZoomRate?.(1 / 120);
+      map.scrollZoom?.setZoomRate?.(1);
     } catch (_) {
       // Ignore if API differs between mapbox versions
     }
@@ -161,30 +418,93 @@ export default function LiveMap() {
     setViewport((v) => ({ ...v, longitude: newLon, latitude: newLat, zoom: newZoom }));
   }, [combinedZones]);
 
-  return (
-    <MapGL
-      ref={mapRef}
-      {...viewport}
-      onViewportChange={setViewport}
-      mapboxApiAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-      mapStyle="mapbox://styles/mapbox/streets-v12"
-      width="100%"
-      height="600px"
-      style={{ borderRadius: '0.5rem' }}
-      onLoad={handleMapLoad}
-    >
-      {combinedZones && (
-        <Source id="zones" type="geojson" data={combinedZones}>
-          <Layer {...zoneFillLayer} />
-          <Layer {...zoneOutlineLayer} />
-        </Source>
-      )}
+  // Handler for vessel marker clicks
+  const handleVesselClick = (vessel: any) => {
+    setSelectedVessel(vessel);
+  };
 
-      {positions?.map((p: any) => (
-        <Marker key={p.mmsi} longitude={p.lon} latitude={p.lat} offsetLeft={-5} offsetTop={-5}>
-          {vesselIcon}
-        </Marker>
-      ))}
-    </MapGL>
+  return (
+    <div className="space-y-4">
+      {/* Map controls */}
+      {userRole === 'fisher' && (
+        <div className="bg-white rounded-lg shadow-sm p-2 flex items-center space-x-2">
+          <label className="inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="form-checkbox h-4 w-4 text-sky-600 rounded"
+              checked={filterMyVesselsOnly}
+              onChange={(e) => setFilterMyVesselsOnly(e.target.checked)}
+            />
+            <span className="ml-2 text-sm text-slate-700">Show only my vessels</span>
+          </label>
+          
+          <div className="flex-grow"></div>
+          
+          {/* Refresh controls removed since data is now generated locally */}
+        </div>
+      )}
+      
+      {/* Map container */}
+      <div className="relative rounded-lg overflow-hidden shadow-lg">
+        <MapGL
+          ref={mapRef}
+          {...viewport}
+          onViewportChange={setViewport}
+          mapboxApiAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
+          mapStyle="mapbox://styles/mapbox/streets-v12"
+          width="100%"
+          height="600px"
+          onLoad={handleMapLoad}
+        >
+          {combinedZones && (
+            <Source id="zones" type="geojson" data={combinedZones}>
+              <Layer {...zoneFillLayer} />
+              <Layer {...zoneOutlineLayer} />
+            </Source>
+          )}
+
+          {filteredPositions?.map((p: any) => (
+            <Marker 
+              key={p.mmsi} 
+              longitude={p.lon} 
+              latitude={p.lat} 
+              offsetLeft={-12} 
+              offsetTop={-12}
+              onClick={() => handleVesselClick(p)}
+            >
+              {vesselIcon(p.isRegistered)}
+            </Marker>
+          ))}
+          
+          {selectedVessel && (
+            <Popup
+              longitude={selectedVessel.lon}
+              latitude={selectedVessel.lat}
+              closeButton={true}
+              closeOnClick={false}
+              onClose={() => setSelectedVessel(null)}
+              anchor="bottom"
+              className="vessel-popup-custom"
+            >
+              <div className="p-2">
+                <h3 className="font-semibold text-sm">{selectedVessel.vesselName}</h3>
+                <p className="text-xs text-slate-500">MMSI: {selectedVessel.mmsi}</p>
+                <p className="text-xs text-slate-500">
+                  {new Date(selectedVessel.timestamp).toLocaleTimeString()}
+                </p>
+                <p className="text-xs font-mono">
+                  {selectedVessel.lat.toFixed(5)}, {selectedVessel.lon.toFixed(5)}
+                </p>
+              </div>
+            </Popup>
+          )}
+        </MapGL>
+        
+        <div className="absolute bottom-2 right-2 bg-white/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs text-slate-500">
+          <p>Auto-updating: Real-time (local simulation)</p>
+          <p>Vessels shown: {filteredPositions?.length || 0}</p>
+        </div>
+      </div>
+    </div>
   );
 } 

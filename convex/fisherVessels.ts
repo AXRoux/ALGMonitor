@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getUserByClerkId } from "./utils";
 
@@ -159,4 +159,9 @@ export const updateVesselByAdmin = mutation({
     }
     return vesselId;
   },
+});
+
+// Internal query: list all vessels (no auth)
+export const listAllVesselsInternal = internalQuery(async (ctx) => {
+  return await ctx.db.query("fisherVessels").collect();
 }); 

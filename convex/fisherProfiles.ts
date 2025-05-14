@@ -99,18 +99,44 @@ export const updateMyFisherProfile = mutation({
     if (!identity) {
       throw new ConvexError("Authentication required to update profile.");
     }
-    const existingProfile = await getUserByClerkId(ctx, identity.subject, "fisherProfiles");
+    
+    // Get existing profile or create one if it doesn't exist
+    let existingProfile = await getUserByClerkId(ctx, identity.subject, "fisherProfiles");
+    
     if (!existingProfile) {
-      throw new ConvexError("No fisher profile found for the current user.");
+      // Check if user has fisher role
+      const userRole = await ctx.db
+        .query("userRoles")
+        .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+        .unique();
+      
+      if (!userRole || userRole.role !== "fisher") {
+        throw new ConvexError("Only users with 'fisher' role can create a profile.");
+      }
+      
+      // Create a new profile with defaults
+      const newProfileId = await ctx.db.insert("fisherProfiles", {
+        clerkUserId: identity.subject,
+        name: name || identity.name || "Fisher",
+        mmsi: `temp-${Date.now()}`, // temporary MMSI until real one is provided
+        phone: phone || "",
+        alertsEnabled: true, // default to enabled
+      });
+      
+      // Get the newly created profile
+      existingProfile = await ctx.db.get(newProfileId);
     }
+    
+    // Update the profile with any changed fields
     const updates: { name?: string; phone?: string } = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
-    if (Object.keys(updates).length === 0) {
-      return existingProfile._id; 
+    
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(existingProfile!._id, updates);
     }
-    await ctx.db.patch(existingProfile._id, updates);
-    return existingProfile._id;
+    
+    return existingProfile!._id;
   },
 });
 
@@ -149,8 +175,8 @@ export const updateFisherByAdmin = mutation({
     if (alertsEnabled !== undefined) updates.alertsEnabled = alertsEnabled;
 
     if (Object.keys(updates).length > 0) {
-      await ctx.db.patch(profileId, updates);
+      await ctx.db.patch(existing!._id, updates);
     }
-    return profileId;
+    return existing!._id;
   },
 }); 
