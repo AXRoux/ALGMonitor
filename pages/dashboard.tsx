@@ -14,7 +14,8 @@ const LoadingSpinner = () => (
 const DashboardPage = () => {
   const { isSignedIn, user } = useUser();
   
-  const activeVesselsCount = useQuery(api.users.getMyUserRole, isSignedIn ? {} : 'skip'); 
+  // Mock data to match the 5 vessels in our simulation
+  const activeVesselsCount = 5; 
   const alertsTodayCount = 0; 
   const restrictedZonesCount = 0; 
   
@@ -51,7 +52,7 @@ const DashboardPage = () => {
         <div className="bg-white shadow-lg rounded-xl p-6 border border-slate-200">
           <h2 className="text-xl font-semibold text-slate-700 mb-1">Active Vessels</h2>
           <p className="text-slate-500 text-sm mb-3">السفن النشطة</p>
-          <p className="text-5xl font-bold text-sky-600">{typeof activeVesselsCount === 'number' ? activeVesselsCount : 'N/A'} </p>
+          <p className="text-5xl font-bold text-sky-600">{activeVesselsCount}</p>
         </div>
         <div className="bg-white shadow-lg rounded-xl p-6 border border-slate-200">
           <h2 className="text-xl font-semibold text-slate-700 mb-1">Alerts Today</h2>
